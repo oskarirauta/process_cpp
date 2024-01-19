@@ -1,0 +1,3 @@
+[submodule "throws"]
+	path = throws
+	url = https://github.com/oskarirauta/throws_cpp.git
