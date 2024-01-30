@@ -34,6 +34,7 @@ process_t::process_t(const std::string& cmd, const std::vector<std::string>& arg
 
 process_t::~process_t() {
 
+	this -> status();
 	if ( this -> pipe != nullptr ) delete this -> pipe;
 	if ( this -> buffer != nullptr ) delete this -> buffer;
 	if ( this -> stream != nullptr ) delete this -> stream;
