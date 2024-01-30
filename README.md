@@ -139,6 +139,31 @@ retrieving exit code with subscript operator,
 it doesn't matter which stream you use, all give
 same exit code.
 
+### Exiting / zombie processes
+
+At end of process, if process_t is not destroyed, a zombie (defunct) process
+leaves hanging around. You should call process_t::status() even if you are
+not interested in status code from execution.
+
+example:
+```
+process_t *proc = new process_t(...);
+...
+proc -> status();
+```
+
+calling status() ends and scrubs executed process completely, this means
+that after calling status() - there is no way anymore to interact with
+your process anymore, any sign of it's execution from system disappears.
+This also removes zombie process that can be seen with ```ps -ax``` command.
+
+status() is automatically called on destruction of process_t; and it is not
+dangerous that zombie processes exist. They disappear from system anyway
+when your main program exits; and they simply are dead processes, but
+ofcourse, if you run process_t a lot.. It won't look very nice in the list
+of processes by system. And even that they are dead left-overs; I think
+it's better to get rid of them.
+
 ### Methods
 
 Instead of using subscript operator to get desired stream, you
