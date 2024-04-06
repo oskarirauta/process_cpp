@@ -1,11 +1,12 @@
-# process_cpp
+[![License:MIT](https://img.shields.io/badge/License-MIT-blue?style=plastic)](LICENSE)
+[![C++ CI build](../../actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
+
+### process_cpp
 
 C++ library for executing shell commands in Linux with support for
 both stdout and stderr output, along with stdin input.
 
-[![C++ CI build](https://github.com/oskarirauta/process_cpp/actions/workflows/build.yml/badge.svg)](https://github.com/oskarirauta/process_cpp/actions/workflows/build.yml)
-
-### fork of cpp-subprocess
+## <sub>fork of cpp-subprocess</sub>
 
 Project started as it's own project, but is very similar to [cpp-subprocess](https://github.com/tsaarni/cpp-subprocess)
 of Tero Saarni; this is because I was initially writing my completely
@@ -23,14 +24,14 @@ it has all the same features and some more; it is used differently. Not a lot
 differently, but still, to replace cpp-subprocess with process_cpp, it will
 require modification on host project.
 
-### Streams
+## <sub>Streams</sub>
 
 stdout can be seen by using class as a input stream. There is also a
 subscript operator helping to select stderr; also stdin works like a
 output stream directly pointing to class.
 You can also redirect stdin from another process execution.
 
-### Examples
+## <sub>Examples</sub>
 
 Same examples are available in provided example code, but
 here they are again with explanations.
@@ -139,7 +140,7 @@ retrieving exit code with subscript operator,
 it doesn't matter which stream you use, all give
 same exit code.
 
-### Exiting / zombie processes
+## <sub>Exiting / zombie processes</sub>
 
 At end of process, if process_t is not destroyed, a zombie (defunct) process
 leaves hanging around. You should call process_t::status() even if you are
@@ -164,18 +165,19 @@ ofcourse, if you run process_t a lot.. It won't look very nice in the list
 of processes by system. And even that they are dead left-overs; I think
 it's better to get rid of them.
 
-### Methods
+## <sub>Methods</sub>
 
 Instead of using subscript operator to get desired stream, you
 can alternatively use methods out() and err().
 Method status() outputs exit code, and waits process to finish.
 
-### Depencies
+## <sub>Depencies</sub>
 
 process_cpp depends on [throws_cpp](https://github.com/oskarirauta/throws_cpp)
 which is a small utility to throw with stream.
 
-### Importing
+## <sub>Importing</sub>
+
  - import throws_cpp as a submodule to throws
  - import process_cpp as a submodule to process
  - include throws_cpp's Makefile.inc and logger_cpp's Makefile.inc in your Makefile
@@ -188,10 +190,6 @@ Remember to clone with recursive submodules, using --recursive-submodules argume
 Note: with default build system, you need objs directory in your project's root, this is path
 where object files are built.
 
-### Example
+## <sub>Example</sub>
 
 Sample code is provided.
-
-### Other
-
-MIT-license
