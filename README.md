@@ -1,6 +1,5 @@
 [![License:MIT](https://img.shields.io/badge/License-MIT-blue?style=plastic)](LICENSE)
 [![C++ CI build](../../actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
-
 ### process_cpp
 
 C++ library for executing shell commands in Linux with support for

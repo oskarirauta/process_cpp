@@ -1,5 +1,5 @@
-PROCESS_DIR?=process
-INCLUDES += -I./$(PROCESS_DIR)/include
+PROCESS_DIR?=./process
+INCLUDES += -I$(PROCESS_DIR)/include
 
 PROCESS_OBJS:= \
 	objs/process_buffer.o \
