@@ -10,12 +10,12 @@ process_t::OUTPUT::operator int() {
 
 process_t::OUTPUT::operator std::string() {
 
-	if ( this -> parent == nullptr || this -> parent -> stream == nullptr )
+	if ( this -> parent == nullptr )
 		return "";
 
 	switch ( this -> type ) {
-		case STREAM_OUT: return this -> parent -> stream -> str_out();
-		case STREAM_ERR: return this -> parent -> stream -> str_err();
+		case STREAM_OUT: return this -> parent -> str_out();
+		case STREAM_ERR: return this -> parent -> str_err();
 		case STREAM_STATUS: return std::to_string(this -> parent -> status());
 		default: return "";
 	}

@@ -1,5 +1,7 @@
 #include <iostream>
 #include <algorithm>
+#include <cerrno>
+#include <poll.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -8,12 +10,21 @@
 static const int READ = 0;
 static const int WRITE = 1;
 
+static std::string trim_end(std::string s) {
+
+	while ( !s.empty() && std::string(" \t\n\r\f\v").find_first_of(s.back()) != std::string::npos )
+		s.pop_back();
+	return s;
+}
+
 process_t::process_t(const std::string& cmd, const std::vector<std::string>& args, process_t *input) {
 
-	this -> args = {{ cmd.c_str() }};
+	this -> arg_storage.push_back(cmd);
+	for ( const std::string& arg : args )
+		this -> arg_storage.push_back(arg);
 
-	std::transform(args.begin(), args.end(), std::back_inserter(this -> args),
-		[](const std::string& s) { return s.c_str(); });
+	for ( const std::string& arg : this -> arg_storage )
+		this -> args.push_back(arg.c_str());
 	this -> args.push_back(nullptr);
 
 	try {
@@ -40,14 +51,77 @@ process_t::~process_t() {
 	if ( this -> stream != nullptr ) delete this -> stream;
 }
 
+// Drain stdout and stderr into out_buf/err_buf. This MUST happen before waiting
+// for the child: a child that writes more than the pipe buffer holds blocks on
+// write until a reader drains it, so waiting first would deadlock. Both fds are
+// polled together so a full stderr cannot stall draining of stdout.
+void process_t::collect() const {
+
+	if ( this -> collected )
+		return;
+	this -> collected = true;
+
+	// close our copy of the child's stdin so a child that reads until EOF finishes
+	if ( this -> buffer != nullptr && this -> buffer -> in != nullptr )
+		this -> buffer -> in -> close();
+
+	if ( this -> pipe == nullptr )
+		return;
+
+	struct pollfd pfd[2];
+	pfd[0].fd = this -> pipe -> out[READ];	// -1 when stdout is piped to another process
+	pfd[1].fd = this -> pipe -> err[READ];
+	pfd[0].events = pfd[1].events = POLLIN;
+
+	char tmp[4096];
+
+	while ( pfd[0].fd != -1 || pfd[1].fd != -1 ) {
+
+		if ( ::poll(pfd, 2, -1) < 0 ) {
+			if ( errno == EINTR )
+				continue;
+			break;
+		}
+
+		for ( int i = 0; i < 2; i++ ) {
+
+			if ( pfd[i].fd == -1 || ( pfd[i].revents & ( POLLIN | POLLHUP | POLLERR )) == 0 )
+				continue;
+
+			ssize_t n = ::read(pfd[i].fd, tmp, sizeof(tmp));
+
+			if ( n > 0 )
+				( i == 0 ? this -> out_buf : this -> err_buf ).append(tmp, (size_t)n);
+			else {	// EOF or error: stop watching this fd
+				::close(pfd[i].fd);
+				pfd[i].fd = -1;
+			}
+		}
+	}
+}
+
+std::string process_t::str_out() const {
+
+	this -> collect();
+	return trim_end(this -> out_buf);
+}
+
+std::string process_t::str_err() const {
+
+	this -> collect();
+	return trim_end(this -> err_buf);
+}
+
 int process_t::status() {
+
+	this -> collect();	// drain output first so waitpid cannot deadlock
 
 	if ( this -> pid <= 0 )
 		return -1;
 
 	else if ( this -> code < 0 ) {
 
-		::waitpid(pid, &this -> code, 0);
+		::waitpid(this -> pid, &this -> code, 0);
 
 		if ( WIFEXITED(this -> code))
 			this -> code = WEXITSTATUS(this -> code);
@@ -68,7 +142,7 @@ process_t::operator int() {
 
 process_t::operator std::string() {
 
-	return this -> stream == nullptr ? "" : this -> stream -> str_out();
+	return this -> str_out();
 }
 
 process_t::OUTPUT process_t::out() {
@@ -100,13 +174,8 @@ void process_t::execute() {
 	this -> buffer -> in = new filebuffer(this -> pipe -> in[WRITE], std::ios_base::out, 1);
 	this -> stream -> in = new std::ostream(this -> buffer -> in);
 
-	if ( this -> pipe -> out[READ] != -1 ) {
-		this -> buffer -> out = new filebuffer(this -> pipe -> out[READ], std::ios_base::in, 1);
-		this -> stream -> out = new std::istream(this -> buffer -> out);
-	}
-
-	this -> buffer -> err = new filebuffer(this -> pipe -> err[READ], std::ios_base::in, 1);
-	this -> stream -> err = new std::istream(this -> buffer -> err);
+	// stdout (pipe->out[READ]) and stderr (pipe->err[READ]) are read straight
+	// from the pipe fds by collect()
 }
 
 void process_t::run_child() {
@@ -136,24 +205,25 @@ void process_t::run_child() {
 
 process_t& process_t::operator >>(endl_type &endl) {
 
+	(void)endl;
 	if ( this -> stream -> in != nullptr )
 		(*this -> stream -> in) << this -> buf << std::endl;
 
-	this -> buffer -> in -> close();
+	if ( this -> buffer -> in != nullptr )
+		this -> buffer -> in -> close();
 	this -> buf = std::string();
 	return *this;
 }
 
 std::ostream& operator <<(std::ostream& os, const process_t& proc) {
 
-	if ( proc.stream != nullptr && proc.stream -> out != nullptr )
-		os << proc.stream -> str_out();
+	os << proc.str_out();
 	return os;
 }
 
 std::ostream& operator <<(std::ostream& os, const process_t *proc) {
 
-	if ( proc != nullptr && proc -> stream != nullptr && proc -> stream -> out != nullptr )
-		os << proc -> stream -> str_out();
+	if ( proc != nullptr )
+		os << proc -> str_out();
 	return os;
 }

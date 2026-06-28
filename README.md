@@ -90,8 +90,9 @@ args as a vector, you can just add them as series of strings.
 This method uses parameter pack using std::convertible_to<>
 which is not available in standards earlier than c++20.
 
-Note: as this uses throws.cpp, which requires c++20, you
-actually cannot choose any of lower standards.
+Note: only the variadic string-argument constructor needs c++20; with
+c++17 you pass the arguments as a vector (the `#if` above selects the
+right form). process_cpp itself builds with c++17 or newer.
 
 ```
 process_t proc("sort", { "-r" });

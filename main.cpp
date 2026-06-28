@@ -64,6 +64,7 @@ void example6() {
 	int code = *echo;
 	std::cout << "\noutput of echo command:\n" << out << std::endl;
 	std::cout << "exit code: " << code << std::endl;
+	delete echo;
 }
 
 void example7() {
@@ -79,7 +80,7 @@ void example7() {
 }
 
 
-int main(int argc, char **argv) {
+int main() {
 
 	std::cout << "process test" << std::endl;
 

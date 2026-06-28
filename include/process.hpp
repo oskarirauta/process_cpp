@@ -34,7 +34,6 @@ class process_t {
 
 		#if __cplusplus > 201803L
 		process_t(const std::convertible_to<std::string> auto& ...args);
-		process_t(const std::convertible_to<std::string> auto& ...args, process_t *input);
 		#endif
 
 		process_t(const std::string& cmd, const std::vector<std::string>& args = {}, process_t *input = nullptr);
@@ -51,14 +50,25 @@ class process_t {
 
 		pid_t pid = -1;
 		int code = -1;
-		std::vector<const char*> args;
+		std::vector<std::string> arg_storage;	// owns the argument strings ...
+		std::vector<const char*> args;		// ... that args points into
 
 		PIPE	*pipe = nullptr;
 		BUFFER	*buffer = nullptr;
 		STREAM	*stream = nullptr;
 
+		// stdout/stderr are drained eagerly into these buffers by collect();
+		// reading lazily while status()/the destructor waits would deadlock as
+		// soon as a child fills the (~64 KiB) pipe buffer
+		mutable std::string out_buf;
+		mutable std::string err_buf;
+		mutable bool collected = false;
+
 		void execute();
 		void run_child();
+		void collect() const;			// drain stdout+stderr before waiting
+		std::string str_out() const;
+		std::string str_err() const;
 };
 
 class process_t::PIPE {
@@ -79,10 +89,8 @@ class process_t::BUFFER {
 
 	private:
 		filebuffer	*in;
-		filebuffer	*out;
-		filebuffer	*err;
 
-		BUFFER() : in(nullptr), out(nullptr), err(nullptr) {}
+		BUFFER() : in(nullptr) {}
 
 	public:
 		~BUFFER();
@@ -94,21 +102,11 @@ class process_t::STREAM {
 
 	private:
 		std::ostream	*in;
-		std::istream	*out;
-		std::istream	*err;
 
-		std::string	str_out();
-		std::string	str_err();
-
-		STREAM() : in(nullptr), out(nullptr), err(nullptr) {}
+		STREAM() : in(nullptr) {}
 
 	public:
 		~STREAM();
-
-	friend std::ostream& operator <<(std::ostream& os, const process_t& proc);
-	friend std::ostream& operator <<(std::ostream& os, const process_t *proc);
-	friend std::ostream& operator <<(std::ostream& os, process_t::OUTPUT output);
-
 };
 
 class process_t::OUTPUT {
@@ -140,36 +138,13 @@ constexpr process_t& process_t::operator >>(T x) {
 
 process_t::process_t(const std::convertible_to<std::string> auto& ...args) {
 
-	for ( std::string arg : { std::string(args)... }) {
+	this -> arg_storage = { std::string(args)... };
+	for ( const std::string& arg : this -> arg_storage )
 		this -> args.push_back(arg.c_str());
-	}
 	this -> args.push_back(nullptr);
 
 	try {
-		this -> pipe = new PIPE(); //(input);
-	} catch ( const std::runtime_error& e ) {
-		throws << e.what() << std::endl;
-	}
-
-	this -> buffer = new BUFFER;
-	this -> stream = new STREAM;
-
-	try {
-		this -> execute();
-	} catch ( std::runtime_error& e ) {
-		throws << e.what() << std::endl;
-	}
-}
-
-process_t::process_t(const std::convertible_to<std::string> auto& ...args, process_t *input) {
-
-	for ( std::string arg : { std::string(args)... }) {
-		this -> args.push_back(arg.c_str());
-	}
-	this -> args.push_back(nullptr);
-
-	try {
-		this -> pipe = new PIPE(input);
+		this -> pipe = new PIPE();
 	} catch ( const std::runtime_error& e ) {
 		throws << e.what() << std::endl;
 	}
