@@ -4,6 +4,7 @@
 #include <vector>
 #include <sstream>
 #include <iostream>
+#include <atomic>
 #include <ext/stdio_filebuf.h>
 #include "throws.hpp"
 
@@ -19,6 +20,16 @@ class process_t {
 		int status();
 		OUTPUT out();
 		OUTPUT err();
+
+		// Bounded execution. Configure before reading any output (reading triggers
+		// the drain/wait). Each returns *this for chaining.
+		process_t& timeout(int ms);                     // wall-clock limit; < 0 disables (default)
+		process_t& abort_with(std::atomic<bool>* flag); // kill when *flag becomes true
+		process_t& max_output(size_t bytes);            // cap captured stdout+stderr; 0 = unlimited (default)
+
+		bool timed_out() const;  // the timeout fired and the process was killed
+		bool aborted() const;    // the abort flag fired and the process was killed
+		bool truncated() const;  // captured output reached max_output
 
 		template <typename T>
 		constexpr process_t& operator >>(T x);
@@ -63,6 +74,14 @@ class process_t {
 		mutable std::string out_buf;
 		mutable std::string err_buf;
 		mutable bool collected = false;
+
+		// Bounded-execution options and their outcome (set by collect()).
+		int _timeout_ms = -1;
+		std::atomic<bool>* _abort = nullptr;
+		size_t _max_output = 0;
+		mutable bool _timed_out = false;
+		mutable bool _aborted = false;
+		mutable bool _truncated = false;
 
 		void execute();
 		void run_child();

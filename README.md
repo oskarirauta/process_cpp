@@ -171,6 +171,33 @@ Instead of using subscript operator to get desired stream, you
 can alternatively use methods out() and err().
 Method status() outputs exit code, and waits process to finish.
 
+## <sub>Bounded execution</sub>
+
+A process can be given a wall-clock timeout, an external abort flag and an
+output cap. Configure these **before** reading any output (reading triggers the
+drain/wait). The child runs in its own process group, so on timeout/abort the
+whole tree is killed (`SIGTERM`, escalating to `SIGKILL`).
+
+```cpp
+#include <atomic>
+
+std::atomic<bool> cancel{false};
+
+process_t proc("/bin/sh", { "-c", "long-running-thing" });
+proc.timeout(120000)        // wall-clock limit in ms (< 0 disables, the default)
+    .abort_with(&cancel)    // kill when cancel becomes true (e.g. from another thread)
+    .max_output(100 * 1024);// cap captured stdout+stderr; 0 = unlimited (the default)
+
+std::string out = proc[STREAM_OUT];
+
+if ( proc.timed_out()) { /* killed after the timeout */ }
+if ( proc.aborted())   { /* killed because the abort flag was set */ }
+if ( proc.truncated()) { /* output reached max_output */ }
+```
+
+Without any of these options the behaviour is unchanged: `collect()` blocks and
+drains until the child finishes.
+
 ## <sub>Depencies</sub>
 
 process_cpp depends on [throws_cpp](https://github.com/oskarirauta/throws_cpp)
