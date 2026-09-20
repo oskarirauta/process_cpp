@@ -5,7 +5,83 @@
 #include <sstream>
 #include <iostream>
 #include <atomic>
+#if defined(__has_include) && __has_include(<ext/stdio_filebuf.h>)
 #include <ext/stdio_filebuf.h>
+namespace process_compat {
+	using filebuffer = __gnu_cxx::stdio_filebuf<char>;
+}
+#else
+#include <streambuf>
+#include <unistd.h>
+namespace process_compat {
+	class filebuffer : public std::streambuf {
+	private:
+		int _fd = -1;
+		char _buf[1024];
+
+	public:
+		filebuffer(int fd, std::ios_base::openmode, size_t = 1) : _fd(fd) {
+			setp(_buf, _buf + sizeof(_buf));
+		}
+
+		virtual ~filebuffer() {
+			close();
+		}
+
+		int fd() const { return _fd; }
+
+		void close() {
+			if ( _fd >= 0 ) {
+				sync();
+				::close(_fd);
+				_fd = -1;
+			}
+		}
+
+	protected:
+		virtual int sync() override {
+			if ( _fd < 0 ) return 0;
+			std::ptrdiff_t n = pptr() - pbase();
+			if ( n > 0 ) {
+				const char* ptr = pbase();
+				while ( n > 0 ) {
+					ssize_t written = ::write(_fd, ptr, n);
+					if ( written <= 0 ) return -1;
+					n -= written;
+					ptr += written;
+				}
+				setp(_buf, _buf + sizeof(_buf));
+			}
+			return 0;
+		}
+
+		virtual int_type overflow(int_type ch = traits_type::eof()) override {
+			if ( _fd < 0 ) return traits_type::eof();
+			if ( sync() != 0 ) return traits_type::eof();
+			if ( !traits_type::eq_int_type(ch, traits_type::eof())) {
+				char c = traits_type::to_char_type(ch);
+				if ( ::write(_fd, &c, 1) != 1 )
+					return traits_type::eof();
+			}
+			return ch;
+		}
+
+		virtual std::streamsize xsputn(const char* s, std::streamsize count) override {
+			if ( _fd < 0 || count <= 0 ) return 0;
+			if ( sync() != 0 ) return 0;
+			const char* ptr = s;
+			std::streamsize remaining = count;
+			while ( remaining > 0 ) {
+				ssize_t written = ::write(_fd, ptr, remaining);
+				if ( written <= 0 ) break;
+				remaining -= written;
+				ptr += written;
+			}
+			return count - remaining;
+		}
+	};
+}
+#endif
 #include "throws.hpp"
 
 enum STREAM_TYPE { STREAM_OUT = 0, STREAM_ERR = 1, STREAM_STATUS };
@@ -15,7 +91,7 @@ class process_t {
 	public:
 		using endl_type = std::ostream& (std::ostream&);
 
-		struct OUTPUT;
+		class OUTPUT;
 
 		int status();
 		OUTPUT out();
@@ -52,12 +128,12 @@ class process_t {
 
 	private:
 
-		using filebuffer = __gnu_cxx::stdio_filebuf<char>;
+		using filebuffer = process_compat::filebuffer;
 		std::string buf;
 
-		struct PIPE;
-		struct BUFFER;
-		struct STREAM;
+		class PIPE;
+		class BUFFER;
+		class STREAM;
 
 		pid_t pid = -1;
 		int code = -1;
